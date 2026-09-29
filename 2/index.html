@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colorizing 100-Year-Old Photos | CS Project Report</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --card-bg: #ffffff;
+      --text: #222222;
+      --muted: #666666;
+      --accent: #2b6cb0;
+      --border: #e2e8f0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background-color: var(--bg);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      color: #1a202c;
+    }
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--muted);
+    }
+    .section {
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      margin-bottom: 30px;
+      border: 1px solid var(--border);
+    }
+    h2 {
+      color: var(--accent);
+      margin-top: 0;
+      border-bottom: 2px solid #edf2f7;
+      padding-bottom: 8px;
+    }
+    .img-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+    .img-card {
+      text-align: center;
+    }
+    .img-card img {
+      width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .img-card caption {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .badge {
+      display: inline-block;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: #f7fafc;
+      font-weight: 600;
+    }
+    code {
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <header>
+      <h1>Bringing 100-Year-Old Glass Plates to Life</h1>
+      <p class="subtitle">An Automated Image Alignment Pipeline for the Prokudin-Gorskii Collection</p>
+    </header>
+
+    <!-- SECTION 1: INTRODUCTION -->
+    <div class="section">
+      <h2>1. The Goal</h2>
+      <p>
+        In the early 1900s, Russian photographer Sergei Mikhailovich Prokudin-Gorskii captured high-definition full-color images by taking three consecutive glass plate photographs through <b>Blue</b>, <b>Green</b>, and <b>Red</b> filters.
+      </p>
+      <p>
+        Because the camera shifted slightly between exposures, stacking these three plates directly creates severe color fringing. Our goal is to write a Python algorithm that automatically aligns the plates into a sharp, beautiful RGB composite!
+      </p>
+      
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/intermediate_02_split_channels.png" alt="Split Channels">
+          <caption>Step 1: Splitting the vertical glass plate into B, G, R channels</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/intermediate_01_unaligned.jpg" alt="Unaligned Composite">
+          <caption>Step 2: Naive stacking (Notice the ghosting & color alignment errors)</caption>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: SINGLE SCALE -->
+    <div class="section">
+      <h2>2. Step 1: The Simple Approach (Single-Scale Search)</h2>
+      <p>
+        My first attempt was a basic exhaustive search: keep the <b>Blue channel fixed</b> as our anchor, and slide Green and Red over a small window of <code>[-15, 15]</code> pixels along $x$ and $y$.
+      </p>
+      <p>
+        To measure alignment quality, I evaluated both <b>L2 Distance (MSE)</b> and <b>Normalized Cross-Correlation (NCC)</b>. NCC performed significantly better because it normalizes brightness differences across different color channels.
+      </p>
+      
+      <p><b>Results on Low-Res JPGs:</b></p>
+      <ul>
+        <li><b>Speed:</b> Super fast! Low-resolution images (like <code>cathedral.jpg</code>) aligned in just <b>~0.4 seconds</b>.</li>
+        <li><b>Quality:</b> Perfectly crisp alignment for small displacements.</li>
+      </ul>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/cathedral_single.jpg" alt="Cathedral Single Scale">
+          <caption>Aligned Cathedral (Single-Scale) | Offset: G(0, 4), R(0, 13)</caption>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: IMAGE PYRAMID -->
+    <div class="section">
+      <h2>3. Step 2: Hitting a Wall with High-Res Images & The Pyramid Fix</h2>
+      <p>
+        When I ran the single-scale algorithm on high-resolution images (like <code>01725u.jpg</code>), <b>it completely failed!</b> The displacement needed was well over 100 pixels, so the <code>[-15, 15]</code> search window hit a boundary wall and stopped at <code>(15, 15)</code>.
+      </p>
+      <p>
+        Expanding the search window to <code>[-200, 200]</code> on a 60MB TIFF would take several minutes per image.
+      </p>
+
+      <span class="badge">The Solution: Multi-Scale Image Pyramid</span>
+      <p>
+        Instead, I built an <b>Image Pyramid</b>:
+      </p>
+      <ol>
+        <li>Recursively downsample the image by a factor of 2 until it's small (&lt; 128px).</li>
+        <li>Find the coarse shift at the smallest scale.</li>
+        <li>Scale the estimated shift back up by $2\times$ at each ascending level and refine locally using a tight <code>[-7, 7]</code> window.</li>
+      </ol>
+
+      <p>
+        <b>The Result:</b> High-resolution images that previously failed now aligned in just <b>~13–14 seconds</b>!
+      </p>
+    </div>
+
+    <!-- SECTION 4: BELLS & WHISTLES -->
+    <div class="section">
+      <h2>4. Improvement Tricks (Bells & Whistles)</h2>
+      <p>When aligning different color filters, raw pixel intensity matching can fail (e.g., a bright blue sky looks dark in a red filter plate). To solve this, I added two key tweaks:</p>
+      <ul>
+        <li><b>Edge Features (Sobel Gradient):</b> Instead of matching raw pixel values, the algorithm aligns the structural edges computed via Sobel filters.</li>
+        <li><b>Border Cropping:</b> Ignored 15% of the outer borders during distance evaluation so black glass margins don't corrupt the score.</li>
+      </ul>
+    </div>
+
+    <!-- SECTION 5: CUSTOM LOC IMAGES -->
+    <div class="section">
+      <h2>5. Custom Images from Library of Congress</h2>
+      <p>To prove the pipeline works on arbitrary glass plates, I downloaded 3 additional photos from the Library of Congress archive:</p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00200-00216v_pyramid.jpg" alt="LoC Custom 1">
+          <caption>loc-...00216v.jpg | Time: 0.18s</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00200-00220v_pyramid.jpg" alt="LoC Custom 2">
+          <caption>loc-...00220v.jpg | Time: 0.14s</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00300-00347v_pyramid.jpg" alt="LoC Custom 3">
+          <caption>loc-...00347v.jpg | Time: 0.13s</caption>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 6: BENCHMARKS TABLE -->
+    <div class="section">
+      <h2>6. Execution Times & Alignment Offset Table</h2>
+      <p>Below are the calculated displacement vectors $(x, y)$ and processing times across the full dataset:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Type</th>
+            <th>Single G,R (x,y)</th>
+            <th>Pyr G,R (x,y)</th>
+            <th>Pyr Time</th>
+            <th>Total Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>cathedral.jpg</code></td>
+            <td>Provided</td>
+            <td>(0, 4) / (0, 13)</td>
+            <td>(0, 4) / (0, 13)</td>
+            <td>0.21s</td>
+            <td>0.64s</td>
+          </tr>
+          <tr>
+            <td><code>00125v.jpg</code></td>
+            <td>Provided</td>
+            <td>(2, 5) / (1, 10)</td>
+            <td>(2, 5) / (1, 10)</td>
+            <td>0.12s</td>
+            <td>0.48s</td>
+          </tr>
+          <tr>
+            <td><code>00458u.jpg</code></td>
+            <td>Provided</td>
+            <td>(9,15) / (15,15) ❌</td>
+            <td>(8, 43) / (33, 86) ✅</td>
+            <td>13.55s</td>
+            <td>1m 16s</td>
+          </tr>
+          <tr>
+            <td><code>01725u.jpg</code></td>
+            <td>Provided</td>
+            <td>(15,15) / (15,-6) ❌</td>
+            <td>(44, 76) / (77, 161) ✅</td>
+            <td>14.25s</td>
+            <td>1m 17s</td>
+          </tr>
+          <tr>
+            <td><code>loc-00216v.jpg</code></td>
+            <td>Custom</td>
+            <td>(1, 4) / (4, 8)</td>
+            <td>(1, 3) / (4, 8)</td>
+            <td>0.18s</td>
+            <td>0.84s</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><i>(Note: ❌ indicates single-scale window limit boundary failure on high-res images).</i></p>
+    </div>
+
+  </div>
+
+</body>
+</html>
