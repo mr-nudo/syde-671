@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Colorizing 100-Year-Old Photos | CS Project Report</title>
+  <title>Colorizing the Prokudin-Gorskii Photo Collection</title>
   <style>
     :root {
       --bg: #fafafa;
@@ -12,6 +12,8 @@
       --muted: #666666;
       --accent: #2b6cb0;
       --border: #e2e8f0;
+      --fail: #e53e3e;
+      --success: #38a169;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -22,16 +24,16 @@
       padding: 0;
     }
     .container {
-      max-width: 860px;
+      max-width: 900px;
       margin: 40px auto;
       padding: 0 20px;
     }
     header {
       text-align: center;
-      margin-bottom: 50px;
+      margin-bottom: 40px;
     }
     h1 {
-      font-size: 2.5rem;
+      font-size: 2.3rem;
       margin-bottom: 10px;
       color: #1a202c;
     }
@@ -55,7 +57,7 @@
     }
     .img-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 20px;
       margin: 20px 0;
     }
@@ -71,7 +73,7 @@
       display: block;
       font-size: 0.85rem;
       color: var(--muted);
-      margin-top: 6px;
+      margin-top: 8px;
     }
     .badge {
       display: inline-block;
@@ -81,15 +83,24 @@
       border-radius: 4px;
       font-size: 0.85rem;
       font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .tag-fail {
+      color: var(--fail);
+      font-weight: bold;
+    }
+    .tag-success {
+      color: var(--success);
+      font-weight: bold;
     }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 15px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
     th, td {
-      padding: 10px 12px;
+      padding: 10px 10px;
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
@@ -102,6 +113,7 @@
       padding: 2px 6px;
       border-radius: 4px;
       font-family: monospace;
+      font-size: 0.9em;
     }
   </style>
 </head>
@@ -111,171 +123,179 @@
 
     <header>
       <h1>Bringing 100-Year-Old Glass Plates to Life</h1>
-      <p class="subtitle">An Automated Image Alignment Pipeline for the Prokudin-Gorskii Collection</p>
+      <p class="subtitle">Automated RGB Colorization and Image Alignment Pipeline</p>
     </header>
 
-    <!-- SECTION 1: INTRODUCTION -->
     <div class="section">
-      <h2>1. The Goal</h2>
+      <h2>Project Overview & Goal</h2>
       <p>
-        In the early 1900s, Russian photographer Sergei Mikhailovich Prokudin-Gorskii captured high-definition full-color images by taking three consecutive glass plate photographs through <b>Blue</b>, <b>Green</b>, and <b>Red</b> filters.
+        In the early 20th century, Russian photographer Sergei Mikhailovich Prokudin-Gorskii recorded history in color by taking three successive monochrome glass plate photographs using <b>Blue</b>, <b>Green</b>, and <b>Red</b> optical filters.
       </p>
       <p>
-        Because the camera shifted slightly between exposures, stacking these three plates directly creates severe color fringing. Our goal is to write a Python algorithm that automatically aligns the plates into a sharp, beautiful RGB composite!
+        Because the glass plates were exposed sequentially, physical movement and small camera shifts occurred between exposures. Stacking these plates raw creates severe color fringing. The goal of this project is to build an automated image processing pipeline that splits, aligns, and outputs sharp RGB composites.
       </p>
       
       <div class="img-grid">
         <div class="img-card">
           <img src="media/intermediate_02_split_channels.png" alt="Split Channels">
-          <caption>Step 1: Splitting the vertical glass plate into B, G, R channels</caption>
+          <caption>Channel Splitting: Separating the digitized plate into Blue (Top), Green (Middle), and Red (Bottom) slices.</caption>
         </div>
         <div class="img-card">
           <img src="media/intermediate_01_unaligned.jpg" alt="Unaligned Composite">
-          <caption>Step 2: Naive stacking (Notice the ghosting & color alignment errors)</caption>
+          <caption>Raw Stacking: Direct overlay without alignment causes severe color misalignment.</caption>
         </div>
       </div>
     </div>
 
-    <!-- SECTION 2: SINGLE SCALE -->
     <div class="section">
-      <h2>2. Step 1: The Simple Approach (Single-Scale Search)</h2>
+      <h2>Single-Scale Alignment</h2>
       <p>
-        My first attempt was a basic exhaustive search: keep the <b>Blue channel fixed</b> as our anchor, and slide Green and Red over a small window of <code>[-15, 15]</code> pixels along $x$ and $y$.
+        My initial baseline approach implemented an exhaustive single-scale displacement search. Using the <b>Blue channel</b> as a static anchor, the Green and Red channels were iteratively shifted over a <code>[-15, 15]</code> pixel search window.
       </p>
       <p>
-        To measure alignment quality, I evaluated both <b>L2 Distance (MSE)</b> and <b>Normalized Cross-Correlation (NCC)</b>. NCC performed significantly better because it normalizes brightness differences across different color channels.
+        To measure image similarity, I evaluated both <b>L2 Norm (Mean Squared Error)</b> and <b>Normalized Cross-Correlation (NCC)</b>. NCC proved significantly more reliable than L2 because it normalizes brightness variations across different monochromatic channels.
       </p>
       
-      <p><b>Results on Low-Res JPGs:</b></p>
       <ul>
-        <li><b>Speed:</b> Super fast! Low-resolution images (like <code>cathedral.jpg</code>) aligned in just <b>~0.4 seconds</b>.</li>
-        <li><b>Quality:</b> Perfectly crisp alignment for small displacements.</li>
+        <li><b>Low-Resolution Performance:</b> On small JPG images (e.g., <code>cathedral.jpg</code>), single-scale search aligned channels cleanly in approximately <b>~0.4 seconds</b>.</li>
+        <li><b>Limitations:</b> Highly constrained search range that fails when displacements exceed 15 pixels.</li>
       </ul>
 
       <div class="img-grid">
         <div class="img-card">
           <img src="media/cathedral_single.jpg" alt="Cathedral Single Scale">
-          <caption>Aligned Cathedral (Single-Scale) | Offset: G(0, 4), R(0, 13)</caption>
+          <caption>Aligned <code>cathedral.jpg</code> (Single-Scale NCC) | Computed Offsets: G(0, 4), R(0, 13).</caption>
         </div>
       </div>
     </div>
 
-    <!-- SECTION 3: IMAGE PYRAMID -->
     <div class="section">
-      <h2>3. Step 2: Hitting a Wall with High-Res Images & The Pyramid Fix</h2>
+      <h2>Multi-Scale Image Pyramid Alignment</h2>
       <p>
-        When I ran the single-scale algorithm on high-resolution images (like <code>01725u.jpg</code>), <b>it completely failed!</b> The displacement needed was well over 100 pixels, so the <code>[-15, 15]</code> search window hit a boundary wall and stopped at <code>(15, 15)</code>.
-      </p>
-      <p>
-        Expanding the search window to <code>[-200, 200]</code> on a 60MB TIFF would take several minutes per image.
+        When processing high-resolution scans (`.u.jpg`, `.a.jpg`, `.tif`), physical channel shifts often exceed 100+ pixels. A single-scale exhaustive search across a <code>[-150, 150]</code> pixel grid would require evaluating over 90,000 shift combinations per channel, quickly exceeding practical execution times.
       </p>
 
-      <span class="badge">The Solution: Multi-Scale Image Pyramid</span>
+      <span class="badge">Recursive Multi-Scale Strategy</span>
       <p>
-        Instead, I built an <b>Image Pyramid</b>:
+        To keep runtimes under a few seconds while covering large search radii, I implemented a recursive <b>Image Pyramid</b>:
       </p>
       <ol>
-        <li>Recursively downsample the image by a factor of 2 until it's small (&lt; 128px).</li>
-        <li>Find the coarse shift at the smallest scale.</li>
-        <li>Scale the estimated shift back up by $2\times$ at each ascending level and refine locally using a tight <code>[-7, 7]</code> window.</li>
+        <li>Recursively downsample channels by a factor of 2 until the base level spatial resolution drops below 128 pixels.</li>
+        <li>Compute a coarse initial offset at the lowest resolution using a standard <code>[-15, 15]</code> window.</li>
+        <li>Propagate the estimated offset up the pyramid by multiplying coordinates by 2, refining the estimate at each level within a localized <code>[-7, 7]</code> window.</li>
       </ol>
+    </div>
 
+    <div class="section">
+      <h2>Case Study: Single-Scale Failure vs. Pyramid Success</h2>
       <p>
-        <b>The Result:</b> High-resolution images that previously failed now aligned in just <b>~13–14 seconds</b>!
+        High-resolution scans cleanly illustrate the difference between the two approaches. On <code>01047u.jpg</code> (Icon), single-scale search failed because the required displacement was far beyond 15 pixels. The search algorithm hit its boundary wall and stopped at <code>(15, 15)</code> for both channels, resulting in severe ghosting artifacts.
       </p>
+      <p>
+        The Multi-Scale Pyramid bypassed this boundary limit effortlessly, discovering the true global displacements in ~14 seconds.
+      </p>
+      
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/01047u_single.jpg" alt="01047u Single Scale Failure">
+          <caption><b>Single-Scale Search (<span class="tag-fail">FAILED</span>):</b> Clamped at boundary limit (15, 15) / (15, 15).</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/01047u_pyramid.jpg" alt="01047u Pyramid Success">
+          <caption><b>Multi-Scale Pyramid (<span class="tag-success">SUCCESS</span>):</b> Correctly resolved G(19, 25), R(33, 71).</caption>
+        </div>
+      </div>
     </div>
 
-    <!-- SECTION 4: BELLS & WHISTLES -->
     <div class="section">
-      <h2>4. Improvement Tricks (Bells & Whistles)</h2>
-      <p>When aligning different color filters, raw pixel intensity matching can fail (e.g., a bright blue sky looks dark in a red filter plate). To solve this, I added two key tweaks:</p>
+      <h2>Bells & Whistles: Feature Maps & Edge Alignments</h2>
+      <p>
+        In images with complex color distributions like <code>01269v.jpg</code> (mural depicting animals), raw pixel intensity matching introduces minor visual blur and misalignment. This happens because specific pigments (such as metallic gold or deep blue background dyes) reflect light differently through monochrome glass filters, causing brightness inversions.
+      </p>
+
+      <p><b>Pipeline Refinements:</b></p>
       <ul>
-        <li><b>Edge Features (Sobel Gradient):</b> Instead of matching raw pixel values, the algorithm aligns the structural edges computed via Sobel filters.</li>
-        <li><b>Border Cropping:</b> Ignored 15% of the outer borders during distance evaluation so black glass margins don't corrupt the score.</li>
+        <li><b>Sobel Edge Feature Extraction:</b> Converted raw pixel intensities into gradient magnitude maps via a Sobel filter before computing NCC. The algorithm aligns structural contours rather than volatile raw intensities.</li>
+        <li><b>15% Margin Cropping:</b> Masked outer border frame margins during scoring to eliminate false matches caused by border text, glass plate edges, and black frame padding.</li>
       </ul>
-    </div>
-
-    <!-- SECTION 5: CUSTOM LOC IMAGES -->
-    <div class="section">
-      <h2>5. Custom Images from Library of Congress</h2>
-      <p>To prove the pipeline works on arbitrary glass plates, I downloaded 3 additional photos from the Library of Congress archive:</p>
 
       <div class="img-grid">
         <div class="img-card">
-          <img src="media/loc-service-pnp-prok-00200-00216v_pyramid.jpg" alt="LoC Custom 1">
-          <caption>loc-...00216v.jpg | Time: 0.18s</caption>
+          <img src="media/01269v_single.jpg" alt="01269v Standard Alignment">
+          <caption><b>Raw Intensity Matching:</b> Standard NCC exhibits minor alignment bleed along animal contours.</caption>
         </div>
         <div class="img-card">
-          <img src="media/loc-service-pnp-prok-00200-00220v_pyramid.jpg" alt="LoC Custom 2">
-          <caption>loc-...00220v.jpg | Time: 0.14s</caption>
-        </div>
-        <div class="img-card">
-          <img src="media/loc-service-pnp-prok-00300-00347v_pyramid.jpg" alt="LoC Custom 3">
-          <caption>loc-...00347v.jpg | Time: 0.13s</caption>
+          <img src="media/01269v_pyramid.jpg" alt="01269v Sobel Edge Alignment">
+          <caption><b>Sobel Edge Matching + Cropping:</b> Crisp registration across fine detail lines (G: (2, 6), R: (3, 13)).</caption>
         </div>
       </div>
     </div>
 
-    <!-- SECTION 6: BENCHMARKS TABLE -->
     <div class="section">
-      <h2>6. Execution Times & Alignment Offset Table</h2>
-      <p>Below are the calculated displacement vectors $(x, y)$ and processing times across the full dataset:</p>
+      <h2>Library of Congress Custom Downloads</h2>
+      <p>
+        To confirm the pipeline's robustness on arbitrary glass plates outside the provided sample set, I downloaded three additional high-resolution images from the Library of Congress Prokudin-Gorskii archive:
+      </p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00200-00216v_pyramid.jpg" alt="LoC Custom 00216v">
+          <caption><code>loc-...00216v.jpg</code><br>Offsets: G(1, 3), R(4, 8) | Time: 0.18s</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00200-00220v_pyramid.jpg" alt="LoC Custom 00220v">
+          <caption><code>loc-...00220v.jpg</code><br>Offsets: G(-1, 4), R(-1, 10) | Time: 0.14s</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/loc-service-pnp-prok-00300-00347v_pyramid.jpg" alt="LoC Custom 00347v">
+          <caption><code>loc-...00347v.jpg</code><br>Offsets: G(4, 4), R(8, 13) | Time: 0.13s</caption>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Complete Results & Execution Benchmarks</h2>
+      <p>
+        Below is the full evaluation benchmark compiled across all provided sample images and custom Library of Congress downloads:
+      </p>
 
       <table>
         <thead>
           <tr>
             <th>Filename</th>
-            <th>Type</th>
+            <th>Category</th>
             <th>Single G,R (x,y)</th>
-            <th>Pyr G,R (x,y)</th>
+            <th>Single Time</th>
+            <th>Pyramid G,R (x,y)</th>
             <th>Pyr Time</th>
             <th>Total Time</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><code>cathedral.jpg</code></td>
-            <td>Provided</td>
-            <td>(0, 4) / (0, 13)</td>
-            <td>(0, 4) / (0, 13)</td>
-            <td>0.21s</td>
-            <td>0.64s</td>
-          </tr>
-          <tr>
-            <td><code>00125v.jpg</code></td>
-            <td>Provided</td>
-            <td>(2, 5) / (1, 10)</td>
-            <td>(2, 5) / (1, 10)</td>
-            <td>0.12s</td>
-            <td>0.48s</td>
-          </tr>
-          <tr>
-            <td><code>00458u.jpg</code></td>
-            <td>Provided</td>
-            <td>(9,15) / (15,15) ❌</td>
-            <td>(8, 43) / (33, 86) ✅</td>
-            <td>13.55s</td>
-            <td>1m 16s</td>
-          </tr>
-          <tr>
-            <td><code>01725u.jpg</code></td>
-            <td>Provided</td>
-            <td>(15,15) / (15,-6) ❌</td>
-            <td>(44, 76) / (77, 161) ✅</td>
-            <td>14.25s</td>
-            <td>1m 17s</td>
-          </tr>
-          <tr>
-            <td><code>loc-00216v.jpg</code></td>
-            <td>Custom</td>
-            <td>(1, 4) / (4, 8)</td>
-            <td>(1, 3) / (4, 8)</td>
-            <td>0.18s</td>
-            <td>0.84s</td>
-          </tr>
+          <tr><td><code>00056v.jpg</code></td><td>Provided</td><td>(1, 6) / (1, 13)</td><td>0.37s</td><td>(1, 6) / (1, 13)</td><td>0.12s</td><td>0.49s</td></tr>
+          <tr><td><code>00125v.jpg</code></td><td>Provided</td><td>(2, 5) / (1, 10)</td><td>0.36s</td><td>(2, 5) / (1, 10)</td><td>0.12s</td><td>0.48s</td></tr>
+          <tr><td><code>00163v.jpg</code></td><td>Provided</td><td>(1, -3) / (1, -4)</td><td>0.40s</td><td>(1, -3) / (1, -4)</td><td>0.15s</td><td>0.55s</td></tr>
+          <tr><td><code>00458u.jpg</code></td><td>Provided</td><td>(9, 15) / (15, 15) <span class="tag-fail">❌</span></td><td>1m 02s</td><td>(8, 43) / (33, 86) <span class="tag-success">✅</span></td><td>13.55s</td><td>1m 16s</td></tr>
+          <tr><td><code>00804v.jpg</code></td><td>Provided</td><td>(-2, 6) / (-4, 13)</td><td>0.41s</td><td>(-2, 6) / (-4, 13)</td><td>0.13s</td><td>0.56s</td></tr>
+          <tr><td><code>01007a.jpg</code></td><td>Provided</td><td>(13, 15) / (13, 15) <span class="tag-fail">❌</span></td><td>1m 04s</td><td>(14, 60) / (13, 128) <span class="tag-success">✅</span></td><td>14.42s</td><td>1m 18s</td></tr>
+          <tr><td><code>01047u.jpg</code></td><td>Provided</td><td>(15, 15) / (15, 15) <span class="tag-fail">❌</span></td><td>1m 04s</td><td>(19, 25) / (33, 71) <span class="tag-success">✅</span></td><td>14.08s</td><td>1m 18s</td></tr>
+          <tr><td><code>01164v.jpg</code></td><td>Provided</td><td>(2, 6) / (3, 11)</td><td>0.39s</td><td>(2, 6) / (3, 11)</td><td>0.12s</td><td>0.52s</td></tr>
+          <tr><td><code>01269v.jpg</code></td><td>Provided</td><td>(2, 6) / (3, 14)</td><td>0.46s</td><td>(2, 6) / (3, 13)</td><td>0.15s</td><td>0.61s</td></tr>
+          <tr><td><code>01522v.jpg</code></td><td>Provided</td><td>(2, 6) / (2, 13)</td><td>0.38s</td><td>(2, 6) / (2, 13)</td><td>0.12s</td><td>0.50s</td></tr>
+          <tr><td><code>01597v.jpg</code></td><td>Provided</td><td>(1, 7) / (1, 15)</td><td>0.47s</td><td>(1, 7) / (1, 16)</td><td>0.16s</td><td>0.63s</td></tr>
+          <tr><td><code>01598v.jpg</code></td><td>Provided</td><td>(0, 8) / (-1, 15)</td><td>0.34s</td><td>(0, 8) / (-1, 16)</td><td>0.12s</td><td>0.46s</td></tr>
+          <tr><td><code>01657u.jpg</code></td><td>Provided</td><td>(8, 15) / (-15, 15) <span class="tag-fail">❌</span></td><td>1m 02s</td><td>(9, 56) / (13, 119) <span class="tag-success">✅</span></td><td>13.96s</td><td>1m 16s</td></tr>
+          <tr><td><code>01725u.jpg</code></td><td>Provided</td><td>(15, 15) / (15, -6) <span class="tag-fail">❌</span></td><td>1m 02s</td><td>(44, 76) / (77, 161) <span class="tag-success">✅</span></td><td>14.25s</td><td>1m 17s</td></tr>
+          <tr><td><code>01728v.jpg</code></td><td>Provided</td><td>(1, 8) / (1, 15)</td><td>0.41s</td><td>(1, 8) / (1, 18)</td><td>0.20s</td><td>0.63s</td></tr>
+          <tr><td><code>01861a.jpg</code></td><td>Provided</td><td>(15, 15) / (15, 15) <span class="tag-fail">❌</span></td><td>1m 02s</td><td>(38, 70) / (62, 146) <span class="tag-success">✅</span></td><td>13.85s</td><td>1m 16s</td></tr>
+          <tr><td><code>10131v.jpg</code></td><td>Provided</td><td>(2, 6) / (3, 12)</td><td>0.59s</td><td>(2, 6) / (3, 12)</td><td>0.12s</td><td>0.73s</td></tr>
+          <tr><td><code>31421v.jpg</code></td><td>Provided</td><td>(0, 8) / (0, 13)</td><td>0.36s</td><td>(0, 8) / (0, 13)</td><td>0.14s</td><td>0.50s</td></tr>
+          <tr><td><code>cathedral.jpg</code></td><td>Provided</td><td>(0, 4) / (0, 13)</td><td>0.43s</td><td>(0, 4) / (0, 13)</td><td>0.21s</td><td>0.64s</td></tr>
+          <tr><td><code>loc-...00216v.jpg</code></td><td>LoC Custom</td><td>(1, 4) / (4, 8)</td><td>0.65s</td><td>(1, 3) / (4, 8)</td><td>0.18s</td><td>0.84s</td></tr>
+          <tr><td><code>loc-...00220v.jpg</code></td><td>LoC Custom</td><td>(-1, 4) / (-1, 10)</td><td>0.42s</td><td>(-1, 4) / (-1, 10)</td><td>0.14s</td><td>0.56s</td></tr>
+          <tr><td><code>loc-...00347v.jpg</code></td><td>LoC Custom</td><td>(4, 4) / (9, 13)</td><td>0.40s</td><td>(4, 4) / (8, 13)</td><td>0.13s</td><td>0.53s</td></tr>
         </tbody>
       </table>
-      <p><i>(Note: ❌ indicates single-scale window limit boundary failure on high-res images).</i></p>
     </div>
 
   </div>
