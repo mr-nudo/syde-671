@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SYDE 671 - Part 1: Camera & Perspective</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+  <div class="container">
+
+    <header>
+      <h1>Part 1: Becoming Friends with your Camera</h1>
+      <p class="subtitle">Exploring Perspective, Focal Length, and Center of Projection</p>
+    </header>
+
+    <div class="section">
+      <h2>1. Selfie: The Wrong Way vs. The Right Way</h2>
+      <p>
+        Perspective distortion depends strictly on camera distance to the subject. At close range, 
+        facial features closest to the lens (like the nose) are disproportionately magnified compared to the ears.
+      </p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/selfie_close.jpg" alt="Close-up Selfie Distortion">
+          <caption><b>Close Distance (Wide Angle):</b> Severe foreshortening and facial distortion.</caption>
+        </div>
+        <div class="img-card">
+          <img src="media/selfie_far.jpg" alt="Stepped Back Telephoto Portrait">
+          <caption><b>Stepped Back + Optical Zoom:</b> Relative feature distance turns negligible, producing natural proportions.</caption>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>2. Architectural Perspective Compression</h2>
+      <p>
+        In urban scenes, we start by taking a photo from far down a long path or street while 
+        zooming in (telephoto). Next, we walk down the street toward the subject and take a second photo 
+        without zoom (wide angle), matching the subject's visual scale. 
+      </p>
+      <p>
+        The first photo displays strong <b>perspective compression</b>. Because the camera is far from both the foreground 
+        and background objects, background structures appear abnormally large, flattened, and "compressed" against the foreground. 
+        In the second photo, moving significantly closer drastically increases the relative distance ratio, expanding perceived depth.
+      </p>
+
+      <div class="img-grid">
+        <div class="img-card">
+            <img src="media/arch_far.jpg" alt="Far Architectural Compression">
+            <caption><b>Far View + Zoom:</b> Distance ratio approaches 1:1, flattening perspective.</caption>
+          </div>
+        <div class="img-card">
+          <img src="media/arch_close.jpg" alt="Close Architectural View">
+          <caption><b>Close View (Wide Angle):</b> High distance ratio between foreground and background objects.</caption>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>3. The Dolly Zoom (Vertigo Effect)</h2>
+      <p>
+        By stepping backward while simultaneously zooming in, the subject height remains constant while 
+        the field of view narrows dramatically, creating a warping background effect.
+      </p>
+
+      <div class="gif-container">
+        <img src="media/dolly_zoom.gif" alt="Dolly Zoom Animation">
+        <p style="font-size: 0.85rem; color: var(--muted); margin-top: 8px;">
+          <b>Animated Dolly Zoom GIF:</b> Captured across 8 sequence stills.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
