@@ -1,9 +1,11 @@
-import numpy as np
 import cv2
+import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
+from filters_core import load_image_normalized, get_gaussian_kernel2d
+
 
 def build_gaussian_stack(img, levels=5, sigma_0=2.0, scale=2.0):
+    """Builds a Gaussian pyramid stack."""
     g_stack = [img.copy()]
     curr_sigma = sigma_0
     for _ in range(1, levels):
@@ -13,135 +15,94 @@ def build_gaussian_stack(img, levels=5, sigma_0=2.0, scale=2.0):
         curr_sigma *= scale
     return g_stack
 
+
 def build_laplacian_stack(g_stack):
-    l_stack = []
-    for k in range(len(g_stack) - 1):
-        l_stack.append(g_stack[k] - g_stack[k + 1])
-    l_stack.append(g_stack[-1])  # Top level remains the blurred low-pass
+    """Builds a Laplacian stack from a Gaussian stack."""
+    l_stack = [g_stack[k] - g_stack[k + 1] for k in range(len(g_stack) - 1)]
+    l_stack.append(g_stack[-1])
     return l_stack
 
+
 def multiresolution_blend(imgA, imgB, mask, levels=5):
-    """
-    Multiresolution spline blending (Burt & Adelson).
-    imgA, imgB, and mask must have the exact same shape and range [0, 1].
-    """
-    # 1. Build stacks
+    """Multiresolution spline blending (Burt & Adelson)."""
     g_A = build_gaussian_stack(imgA, levels=levels)
     g_B = build_gaussian_stack(imgB, levels=levels)
     g_M = build_gaussian_stack(mask, levels=levels)
-    
+
     l_A = build_laplacian_stack(g_A)
     l_B = build_laplacian_stack(g_B)
-    
-    # 2. Blend each Laplacian level using the Gaussian mask stack
-    l_blended = []
-    for k in range(levels):
-        l_k = g_M[k] * l_A[k] + (1.0 - g_M[k]) * l_B[k]
-        l_blended.append(l_k)
-        
-    # 3. Reconstruct final image
+
+    l_blended = [g_M[k] * l_A[k] + (1.0 - g_M[k]) * l_B[k] for k in range(levels)]
     blended_img = np.sum(l_blended, axis=0)
+
     return np.clip(blended_img, 0.0, 1.0), l_A, l_B, l_blended
 
+
 def multiresolution_blend_color(imgA, imgB, mask, levels=5):
-    """
-    Multiresolution spline blending for RGB images.
-    imgA, imgB, mask: (H, W, 3) arrays normalized in [0.0, 1.0]
-    """
-    blended_channels = []
-    for c in range(3):
-        blended_c, _, _, _ = multiresolution_blend(
-            imgA[:, :, c], imgB[:, :, c], mask[:, :, c], levels=levels
-        )
-        blended_channels.append(blended_c)
-        
-    blended_rgb = np.stack(blended_channels, axis=-1)
-    return np.clip(blended_rgb, 0.0, 1.0)
+    """Multiresolution spline blending for RGB images across channels."""
+    blended_channels = [
+        multiresolution_blend(imgA[:, :, c], imgB[:, :, c], mask[:, :, c], levels=levels)[0]
+        for c in range(3)
+    ]
+    return np.clip(np.stack(blended_channels, axis=-1), 0.0, 1.0)
 
-#########################
-### Section 2.3 & 2.4 ###
-#########################
 
-# 1. Load and normalize input images to [0, 1]
-apple = np.array(Image.open("data/burt_apple.png").convert("RGB"), dtype=np.float64) / 255.0
-orange = np.array(Image.open("data/burt_orange.png").convert("RGB"), dtype=np.float64) / 255.0
+def visualize_laplacian_breakdown(l_A, l_B, l_blended, levels, output_path):
+    """Generates and saves the visual stack breakdown grid."""
+    fig, axes = plt.subplots(levels, 3, figsize=(10, 2 * levels))
 
-# Ensure images are the exact same shape
-h, w, c = apple.shape
-orange = cv2.resize(orange, (w, h))
+    for k in range(levels):
+        for idx, (stack, title) in enumerate([(l_A, "Apple ($L_A$)"), (l_B, "Orange ($L_B$)"), (l_blended, "Blended ($L_C$)")]):
+            norm_lap = (stack[k] - stack[k].min()) / (stack[k].max() - stack[k].min() + 1e-8)
+            axes[k, idx].imshow(norm_lap)
+            axes[k, idx].axis('off')
+            if k == 0:
+                axes[0, idx].set_title(title)
+        axes[k, 0].set_ylabel(f"Level {k}")
 
-# 2. Create vertical split mask (1.0 on left for Apple, 0.0 on right for Orange)
-mask = np.zeros((h, w, c), dtype=np.float64)
-mask[:, :w // 2, :] = 1.0
+    plt.tight_layout()
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
 
-# 3. Perform Multiresolution Spline Blending (e.g., 5 levels)
-num_levels = 5
-oraple, l_A, l_B, l_blended = multiresolution_blend(apple, orange, mask, levels=num_levels)
-oraple2 = multiresolution_blend_color(apple, orange, mask, levels=num_levels)
 
-# Save final Oraple result
-plt.imsave("media/oraple.jpg", oraple)
-plt.imsave("media/oraple2.jpg", oraple2)
+def main():
+    # --- Oraple Blending ---
+    apple = load_image_normalized("data/burt_apple.png", mode="RGB")
+    orange = load_image_normalized("data/burt_orange.png", mode="RGB")
 
-################################################
-### Visualization: Laplacian Stack Breakdown ###
-################################################
+    h, w, c = apple.shape
+    orange = cv2.resize(orange, (w, h))
 
-fig, axes = plt.subplots(num_levels, 3, figsize=(10, 2 * num_levels))
+    mask = np.zeros((h, w, c), dtype=np.float64)
+    mask[:, :w // 2, :] = 1.0
 
-for k in range(num_levels):
-    # Normalize Laplacian levels to [0, 1] for visual display
-    lap_apple = (l_A[k] - l_A[k].min()) / (l_A[k].max() - l_A[k].min() + 1e-8)
-    lap_orange = (l_B[k] - l_B[k].min()) / (l_B[k].max() - l_B[k].min() + 1e-8)
-    lap_blend = (l_blended[k] - l_blended[k].min()) / (l_blended[k].max() - l_blended[k].min() + 1e-8)
-    
-    axes[k, 0].imshow(lap_apple)
-    axes[k, 0].set_ylabel(f"Level {k}")
-    axes[k, 0].axis('off')
-    
-    axes[k, 1].imshow(lap_orange)
-    axes[k, 1].axis('off')
-    
-    axes[k, 2].imshow(lap_blend)
-    axes[k, 2].axis('off')
+    num_levels = 5
+    oraple, l_A, l_B, l_blended = multiresolution_blend(apple, orange, mask, levels=num_levels)
+    oraple2 = multiresolution_blend_color(apple, orange, mask, levels=num_levels)
 
-axes[0, 0].set_title("Apple Stack ($L_A$)")
-axes[0, 1].set_title("Orange Stack ($L_B$)")
-axes[0, 2].set_title("Blended Stack ($L_C$)")
+    plt.imsave("media/oraple.jpg", oraple)
+    plt.imsave("media/oraple2.jpg", oraple2)
 
-plt.tight_layout()
-plt.savefig("media/oraple_laplacian_stack.png", bbox_inches='tight', dpi=300)
-plt.close()
+    visualize_laplacian_breakdown(l_A, l_B, l_blended, num_levels, "media/oraple_laplacian_stack.png")
 
-# =========================================================================
-# Custom Multiresolution Blend: Batman & Superman Logos (RGB + Custom Mask)
-# =========================================================================
+    # --- Batman & Superman Blend ---
+    batman = load_image_normalized("data/batman-logo.jpg", mode="RGB")
+    superman = load_image_normalized("data/superman-logo.jpg", mode="RGB")
 
-# 1. Load color images
-batman = np.array(Image.open("data/batman-logo.jpg").convert("RGB"), dtype=np.float64) / 255.0
-superman = np.array(Image.open("data/superman-logo.jpg").convert("RGB"), dtype=np.float64) / 255.0
+    h_bat, w_bat, _ = batman.shape
+    superman_resized = cv2.resize(superman, (int(w_bat * 0.95), int(h_bat * 0.82)))
+    h_sup, w_sup, _ = superman_resized.shape
 
-# 2. Resize and shift Superman to match Batman's vertical border span
-h_bat, w_bat, _ = batman.shape
+    superman_aligned = np.ones((h_bat, w_bat, 3), dtype=np.float64)
+    y_offset, x_offset = (h_bat - h_sup) // 2, (w_bat - w_sup) // 2
+    superman_aligned[y_offset:y_offset + h_sup, x_offset:x_offset + w_sup] = superman_resized
 
-# Scale Superman slightly smaller (~82% height) and pad/crop to center the shield borders
-superman_resized = cv2.resize(superman, (int(w_bat * 0.95), int(h_bat * 0.82)))
-h_sup, w_sup, _ = superman_resized.shape
+    mask_split = np.zeros((h_bat, w_bat, 3), dtype=np.float64)
+    mask_split[:, :w_bat // 2, :] = 1.0
 
-# Place resized Superman into a canvas matching Batman's dimensions
-superman_aligned = np.ones((h_bat, w_bat, 3), dtype=np.float64)  # White canvas
-y_offset = (h_bat - h_sup) // 2
-x_offset = (w_bat - w_sup) // 2
-superman_aligned[y_offset:y_offset + h_sup, x_offset:x_offset + w_sup] = superman_resized
+    batman_superman_blend = multiresolution_blend_color(batman, superman_aligned, mask_split, levels=num_levels)
+    plt.imsave("media/batman_superman_aligned_blend.jpg", batman_superman_blend)
 
-# 3. Create vertical split mask
-mask_split = np.zeros((h_bat, w_bat, 3), dtype=np.float64)
-mask_split[:, :w_bat // 2, :] = 1.0
 
-# 4. Perform Color Multiresolution Blend
-num_levels = 5
-batman_superman_blend = multiresolution_blend_color(
-    batman, superman_aligned, mask_split, levels=num_levels
-)
-
-plt.imsave("media/batman_superman_aligned_blend.jpg", batman_superman_blend)
+if __name__ == "__main__":
+    main()

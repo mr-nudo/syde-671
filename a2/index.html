@@ -424,7 +424,7 @@
         <li><b>Computational Efficiency via Associativity:</b> Mathematically combining linear operations (like DoG filtering) saves computation without sacrificing numerical precision.</li>
         <li><b>Information Permanence:</b> Linear operations can reweight frequency bands, but once spatial details are destroyed via low-pass blurring, unsharp masking cannot reconstruct them out of thin air.</li>
         <li><b>Distance-Dependent Human Vision:</b> Hybrid images demonstrate that fine details dominate high visual acuity (close range), while broad illumination patterns dominate low visual acuity (distance).</li>
-        <li><b>Seamless Blending via Multiresolution Stacks:</b> Eliminating boundary seams in image stitching requires scale-dependent blending zones—a principle that underpins modern computational photography.</li>
+        <li><b>Seamless Blending via Multiresolution Stacks:</b> Eliminating visible seams in Laplacian stack blending depends on scale-aware masks: sharp high frequencies blend over narrow boundaries, while broad low frequencies transition smoothly across wider regions.</li>
       </ul>
     </div>
 
