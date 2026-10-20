@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignment 2: Fun with Filters and Frequencies</title>
+  <link rel="stylesheet" href="../style.css">
+  
+  <!-- Custom Inline Styles for Alignment & Section Spacing -->
+  <style>
+    /* Ensure 3-image hybrid cards sit on a single horizontal row */
+    .grid-3-inline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      align-items: start;
+      margin: 1.5rem 0;
+    }
+
+    @media (max-width: 768px) {
+      .grid-3-inline {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .key-learning-box {
+      background-color: #f8fafc;
+      border-left: 4px solid #2563eb;
+      padding: 1rem 1.25rem;
+      margin-top: 1.5rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.95rem;
+    }
+
+    .key-learning-box h4 {
+      margin: 0 0 0.5rem 0;
+      color: #1e293b;
+    }
+
+    .key-learning-box ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+  </style>
+
+  <!-- MathJax configuration to support standard inline and block delimiters -->
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+  <div class="container">
+
+    <header>
+      <h1>Assignment 2: Fun with Filters and Frequencies</h1>
+      <p class="subtitle">Spatial Filtering, Edge Detection, Hybrid Images, and Multiresolution Spline Blending</p>
+    </header>
+
+    <!-- Project Overview -->
+    <div class="section">
+      <h2>Project Overview & Goal</h2>
+      <p>
+        Images can be fundamentally analyzed and manipulated through spatial filtering and frequency decomposition. High frequencies represent fine details and sharp edges, while low frequencies capture smooth transitions and broad structures.
+      </p>
+      <p>
+        In this project, I implemented key spatial and frequency domain algorithms from scratch:
+      </p>
+      <ul>
+        <li><b>Part 1:</b> Custom 2D convolution, finite difference operators, derivative of Gaussian (DoG) edge detectors, and image orientation fields.</li>
+        <li><b>Part 2:</b> Unsharp masking, hybrid images via high/low-pass filtering, and Burt & Adelson multiresolution spline blending using Gaussian and Laplacian stacks.</li>
+      </ul>
+    </div>
+
+    <!-- SECTION 1.1 -->
+    <div class="section">
+      <h2>Part 1.1: Convolutions from Scratch & Finite Differences</h2>
+      <p>
+        I implemented custom 2D spatial convolution algorithms from scratch using both 4-nested loops (iterating over every pixel and kernel location) and 2-nested vectorized loops.
+      </p>
+      
+      <span class="badge">Runtime Benchmarks & Verification</span>
+      <p>
+        Evaluating a 9x9 box filter on a downsampled grayscale selfie yielded the following performance metrics:
+      </p>
+      <ul>
+        <li><b>4-Loop Implementation:</b> High overhead due to nested scalar loops.</li>
+        <li><b>2-Loop Implementation:</b> Substantially faster via vectorized slice operations.</li>
+        <li><b>SciPy <code>convolve2d</code>:</b> C-optimized baseline runtime.</li>
+        <li><b>Numerical Verification:</b> Maximum absolute difference between custom 2-loop convolution and SciPy baseline: <code>0.00e+00</code> (exact numerical match).</li>
+      </ul>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="data/selfie.jpg" alt="Selfie">
+          <div class="caption">Original Grayscale Selfie</div>
+        </div>
+        <div class="img-card">
+          <img src="media/selfie_box9x9.jpg" alt="Selfie Box Filter">
+          <div class="caption">Selfie blurred with 9x9 Box Filter (\(\frac{1}{81} \mathbf{1}_{9 \times 9}\))</div>
+        </div>
+        <div class="img-card">
+          <img src="media/selfie_Dx.jpg" alt="Selfie Dx Derivative">
+          <div class="caption">Horizontal Derivative \(D_x = [1, 0, -1]\)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/selfie_Dy.jpg" alt="Selfie Dy Derivative">
+          <div class="caption">Vertical Derivative \(D_y = [1, 0, -1]^T\)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 1.2 -->
+    <div class="section">
+      <h2>Part 1.2: Finite Difference Operator & Edge Detection</h2>
+      <p>
+        To detect structural boundaries on the standard <code>cameraman.png</code> image, partial derivatives \(I_x\) and \(I_y\) were computed using 1D finite difference filters:
+      </p>
+      <p>$$I_x = I * D_x, \quad I_y = I * D_y$$</p>
+      <p>The total edge strength is given by the gradient magnitude \(M\):</p>
+      <p>$$M = \sqrt{I_x^2 + I_y^2}$$</p>
+      <p>
+        Thresholding \(M\) at \(T = 0.25\) generates a binary edge map. However, because finite differences act as high-pass filters, noise and fine texture details (such as grass blades) trigger spurious edge responses.
+      </p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/cam_Ix.jpg" alt="Cameraman Ix">
+          <div class="caption">Horizontal Gradient \(I_x\)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_Iy.jpg" alt="Cameraman Iy">
+          <div class="caption">Vertical Gradient \(I_y\)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_grad_mag.jpg" alt="Gradient Magnitude">
+          <div class="caption">Gradient Magnitude \(M\)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_edges_bin.jpg" alt="Binary Edge Map">
+          <div class="caption">Binary Edge Map (\(T = 0.25\))</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 1.3 -->
+    <div class="section">
+      <h2>Part 1.3: Derivative of Gaussian (DoG) Filter</h2>
+      <p>
+        To eliminate high-frequency noise prior to differentiation, the image is convolved with a 2D Gaussian kernel (\(k = 25, \sigma = 3.0\)). I compared two mathematically equivalent approaches:
+      </p>
+      <ul>
+        <li><b>Method 1 (Two-Step):</b> Blur image with Gaussian \(G_\sigma\), then apply finite differences \(D_x, D_y\).</li>
+        <li><b>Method 2 (Single-Step DoG):</b> Pre-derive Derivative of Gaussian filters (\(DoG_x = G_\sigma * D_x\)) and convolve directly with the raw image.</li>
+      </ul>
+      <p>
+        By the associativity of convolution, both methods produce identical outputs (max absolute difference: <code>0.00e+00</code>). Pre-computing DoG kernels significantly improves computational efficiency by requiring only a single convolution pass.
+      </p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/DoG_x.jpg" alt="DoG Kernel X">
+          <div class="caption">Derivative of Gaussian Kernel (\(DoG_x\))</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_smooth.jpg" alt="Smoothed Cameraman">
+          <div class="caption">Smoothed Image (\(G_{\sigma=3.0} * I\))</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_dog_grad_mag.jpg" alt="DoG Gradient Magnitude">
+          <div class="caption">DoG Gradient Magnitude</div>
+        </div>
+        <div class="img-card">
+          <img src="media/cam_dog_edges_bin.jpg" alt="DoG Binary Edges">
+          <div class="caption"><b>DoG Binary Edges (\(T = 0.08\)):</b> Suppresses noise while preserving major boundaries.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 1.4 -->
+    <div class="section">
+      <h2>Part 1.4 (Bells & Whistles): Image Orientation Field</h2>
+      <p>
+        Beyond scalar edge magnitudes, the direction of local intensity gradients provides structural orientation information:
+      </p>
+      <p>$$\theta = \text{atan2}(I_y, I_x), \quad \theta \in [-\pi, \pi]$$</p>
+      <p>
+        To construct a continuous orientation map, I mapped the angle \(\theta\) to HSV color space:
+      </p>
+      <ul>
+        <li><b>Hue (\(H\)):</b> Normalized angle \(\frac{\theta + \pi}{2\pi} \in [0, 1]\) (edge orientation dictates color).</li>
+        <li><b>Saturation (\(S\)):</b> Fixed at \(1.0\).</li>
+        <li><b>Value (\(V\)):</b> Scaled by normalized gradient magnitude \(\frac{M}{\max(M)}\) (flat regions remain dark, strong edges glow brightly).</li>
+      </ul>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/cam_gradient_orientation_hsv.jpg" alt="HSV Orientation Field Map">
+          <div class="caption"><b>Gradient Orientation Map:</b> Color hue indicates edge angle (\(-\pi\) to \(\pi\)); brightness indicates edge strength.</div>
+        </div>
+      </div>
+
+      <!-- Section 1 Key Learnings -->
+      <div class="key-learning-box">
+        <h4>Section 1 Learnings & Insights</h4>
+        <ul>
+          <li><b>Associativity Efficiency:</b> Pre-deriving Gaussian derivative kernels (\(DoG_x\)) eliminates an entire filtering pass while yielding identical results.</li>
+          <li><b>Noise Control:</b> Differentiation inherently acts as a noise amplifier. Smoothing before differentiating is non-negotiable for clean edge extraction.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2.1 -->
+    <div class="section">
+      <h2>Part 2.1: Image Sharpening (Unsharp Masking)</h2>
+      <p>
+        Unsharp masking isolates high spatial frequencies by subtracting a Gaussian-blurred low-pass image (\(G_\sigma * I\)) from the original image \(I\). Amplifying these high frequencies sharpens subtle edge details:
+      </p>
+      <p>$$I_{\text{sharp}} = I + \alpha (I - G_\sigma * I) = (1 + \alpha)I - \alpha (G_\sigma * I)$$</p>
+
+      <h3>Standard Architectural Sharpening</h3>
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/taj_sharp.jpg" alt="Taj Mahal Sharpened">
+          <div class="caption"><b>Taj Mahal:</b> Sharpened with \(\alpha = 1.5, \sigma = 2.0\).</div>
+        </div>
+        <div class="img-card">
+          <img src="media/custom_sharp.jpg" alt="Custom Building Sharpened">
+          <div class="caption"><b>Custom Building:</b> Sharpened with \(\alpha = 2.0, \sigma = 2.0\).</div>
+        </div>
+      </div>
+
+      <h3>Evaluation Experiment: Blurring & Resharpening</h3>
+      <p>
+        To test the limits of unsharp masking, an image was blurred using an 11x11 Gaussian kernel (\(\sigma = 2.5\)) to destroy high-frequency details, then resharpened with \(\alpha = 2.5\):
+      </p>
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/eval_original.jpg" alt="Evaluation Original">
+          <div class="caption">1. Original Image</div>
+        </div>
+        <div class="img-card">
+          <img src="media/eval_blurred.jpg" alt="Evaluation Blurred">
+          <div class="caption">2. Blurred (\(k=11, \sigma=2.5\))</div>
+        </div>
+        <div class="img-card">
+          <img src="media/eval_resharpened.jpg" alt="Evaluation Resharpened">
+          <div class="caption">3. Resharpened (\(\alpha=2.5, \sigma=2.5\))</div>
+        </div>
+      </div>
+
+      <!-- Section 2.1 Key Learnings -->
+      <div class="key-learning-box">
+        <h4>Section 2.1 Learnings & Flaws</h4>
+        <ul>
+          <li><b>The Resharpening Limit:</b> Spatial blurring permanently destroys true high-frequency information. Resharpening cannot restore lost details; it only boosts contrast around remaining mid-frequency boundaries, eventually introducing edge halos.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2.2 -->
+    <div class="section">
+      <h2>Part 2.2: Hybrid Images</h2>
+      <p>
+        A hybrid image combines the low spatial frequencies of image \(A\) (\(G_{\sigma_1} * I_A\)) with the high spatial frequencies of image \(B\) (\(I_B - G_{\sigma_2} * I_B\)). Up close, high-frequency details dominate human visual perception; from a distance, low-frequency structural shapes emerge.
+      </p>
+
+      <!-- Group 1: Primary Hybrid (Derek & Nutmeg) -->
+      <h3>Primary Hybrid: Derek & Nutmeg</h3>
+      <p>Cutoff parameters: Low-pass Derek (\(\sigma_1 = 12.0\)), High-pass Nutmeg (\(\sigma_2 = 5.0\)).</p>
+      <div class="grid-3-inline">
+        <div class="img-card">
+          <img src="data/DerekPicture.jpg" alt="Derek Source">
+          <div class="caption">Source A: Derek (Low-Pass Anchor)</div>
+        </div>
+        <div class="img-card">
+          <img src="data/nutmeg.jpg" alt="Nutmeg Source">
+          <div class="caption">Source B: Nutmeg (High-Pass Detail)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/hybrid_derek_nutmeg.jpg" alt="Derek and Nutmeg Hybrid">
+          <div class="caption"><b>Hybrid Output:</b> Derek + Nutmeg</div>
+        </div>
+      </div>
+
+      <!-- FFT Analysis for Favorite Hybrid -->
+      <h3>Frequency Domain (2D FFT Log-Magnitude) Analysis</h3>
+      <p>
+        Below are the 2D Fourier Transform log-magnitude spectra across each stage of the hybrid pipeline for Derek and Nutmeg:
+      </p>
+      <div class="img-grid-primary">
+        <div class="img-card">
+          <img src="media/hybrid_fft_analysis.jpg" alt="2D FFT Spectrum Grid">
+          <div class="caption"><b>FFT Spectra Grid (Left to Right):</b> Input A (Derek) \(\rightarrow\) Low-pass A \(\rightarrow\) Combined Hybrid \(\rightarrow\) High-pass B \(\rightarrow\) Input B (Nutmeg).</div>
+        </div>
+      </div>
+
+      <!-- Group 2: Presidential Hybrid (Obama & Trump) -->
+      <h3>Secondary Hybrid: Obama & Trump</h3>
+      <p>Cutoff parameters: Low-pass Obama (\(\sigma_1 = 5.0\)), High-pass Trump (\(\sigma_2 = 3.5\)).</p>
+      <div class="grid-3-inline">
+        <div class="img-card">
+          <img src="data/Obama-headshot.jpg" alt="Obama Source">
+          <div class="caption">Source A: Obama (Low-Pass)</div>
+        </div>
+        <div class="img-card">
+          <img src="data/Trump-headshot-2.jpg" alt="Trump Source">
+          <div class="caption">Source B: Trump (High-Pass)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/hybrid_trump_obama.jpg" alt="Obama and Trump Hybrid">
+          <div class="caption"><b>Hybrid Output:</b> Obama + Trump</div>
+        </div>
+      </div>
+
+      <!-- Group 3: Animal Hybrid (Tiger & Dog) -->
+      <h3>Secondary Hybrid: Tiger & Dog</h3>
+      <p>Cutoff parameters: Low-pass Tiger (\(\sigma_1 = 1.0\)), High-pass Dog (\(\sigma_2 = 20.0\)).</p>
+      <div class="grid-3-inline">
+        <div class="img-card">
+          <img src="data/tiger-front.jpg" alt="Tiger Source">
+          <div class="caption">Source A: Tiger (Low-Pass)</div>
+        </div>
+        <div class="img-card">
+          <img src="data/dog-front.jpg" alt="Dog Source">
+          <div class="caption">Source B: Dog (High-Pass)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/hybrid_tiger_dog.jpg" alt="Tiger and Dog Hybrid">
+          <div class="caption"><b>Hybrid Output:</b> Tiger + Dog</div>
+        </div>
+      </div>
+
+      <!-- Section 2.2 Key Learnings -->
+      <div class="key-learning-box">
+        <h4>Section 2.2 Learnings & Flaws</h4>
+        <ul>
+          <li><b>Alignment Sensitivity:</b> Eye and pupil alignment are non-negotiable. Misalignment causes severe high-frequency facial ghosting.</li>
+          <li><b>Cross-Species Geometric Flaws:</b> Mismatched skull/snout geometries (e.g., Tiger vs. Dog) cause high-frequency lines to spill outside the low-frequency body silhouette, breaking the distance perception.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2.3 -->
+    <div class="section">
+      <h2>Part 2.3: Multiresolution Spline Blending & The Oraple</h2>
+      <p>
+        Decomposing images into Laplacian stacks (\(L_k\)) allows blending each frequency band independently using a Gaussian mask stack (\(G_{M, k}\)), eliminating seam boundary artifacts.
+      </p>
+      <p>$$L_{C, k} = G_{M, k} \cdot L_{A, k} + (1 - G_{M, k}) \cdot L_{B, k}$$</p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/oraple.jpg" alt="Oraple Result">
+          <div class="caption"><b>The Classic "Oraple":</b> Seamless multiresolution blend using a 5-level stack.</div>
+        </div>
+      </div>
+
+      <h3>3-Column Laplacian Stack Visualization</h3>
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/oraple_laplacian_stack.png" alt="Oraple Laplacian Stack Breakdown">
+          <div class="caption"><b>3-Column Stack Visualization (\(N = 5\)):</b> Apple stack (\(L_A\)), Orange stack (\(L_B\)), and Blended stack (\(L_C\)).</div>
+        </div>
+      </div>
+
+      <!-- Section 2.3 Key Learnings -->
+      <div class="key-learning-box">
+        <h4>Section 2.3 Learnings</h4>
+        <ul>
+          <li><b>Scale-Proportional Masking:</b> Blurring the transition mask proportionally at each level ensures high frequencies transition sharply while low frequencies blend smoothly over wider spatial distances.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2.4 -->
+    <div class="section">
+      <h2>Part 2.4: Custom RGB Emblem Blend</h2>
+      <p>
+        Custom multiresolution blend combining Batman and Superman logos across independent 3-channel RGB color stacks with automated bounding-box vertex alignment.
+      </p>
+
+      <div class="grid-3-inline">
+        <div class="img-card">
+          <img src="data/batman-logo.jpg" alt="Batman Emblem">
+          <div class="caption">Source 1: Batman Logo</div>
+        </div>
+        <div class="img-card">
+          <img src="data/superman-logo.jpg" alt="Superman Emblem">
+          <div class="caption">Source 2: Superman Logo</div>
+        </div>
+        <div class="img-card">
+          <img src="media/batman_superman_aligned_blend.jpg" alt="Batman vs Superman Blend">
+          <div class="caption"><b>Final Color Blend ("Batman vs. Superman"):</b> RGB multiresolution blend with vertex boundary alignment.</div>
+        </div>
+      </div>
+
+      <!-- Section 2.4 Key Learnings -->
+      <div class="key-learning-box">
+        <h4>Section 2.4 Learnings</h4>
+        <ul>
+          <li><b>Multi-Channel Consistency:</b> Processing RGB channels independently prevents color bleeding and maintains brand hue saturation across seams.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SUMMARY TAKEAWAY -->
+    <div class="section">
+      <h2>Summary Takeaway & Final Thoughts</h2>
+      <p class="subtitle" style="font-style: italic; color: #64748b; margin-top: -10px;">
+        A high-level recap of spatial filtering principles and perceptual vision mechanics.
+      </p>
+
+      <p>
+        Working with spatial frequencies illustrates how human visual perception decomposes raw light signals into scale-dependent channels. Through this assignment, four overarching insights emerged:
+      </p>
+      <ul>
+        <li><b>Computational Efficiency via Associativity:</b> Mathematically combining linear operations (like DoG filtering) saves computation without sacrificing numerical precision.</li>
+        <li><b>Information Permanence:</b> Linear operations can reweight frequency bands, but once spatial details are destroyed via low-pass blurring, unsharp masking cannot reconstruct them out of thin air.</li>
+        <li><b>Distance-Dependent Human Vision:</b> Hybrid images demonstrate that fine details dominate high visual acuity (close range), while broad illumination patterns dominate low visual acuity (distance).</li>
+        <li><b>Seamless Blending via Multiresolution Stacks:</b> Eliminating boundary seams in image stitching requires scale-dependent blending zones—a principle that underpins modern computational photography.</li>
+      </ul>
+    </div>
+
+  </div>
+
+</body>
+</html>

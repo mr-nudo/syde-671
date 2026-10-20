@@ -13,7 +13,7 @@ from filters_core import conv2d_4loops, conv2d_2loops
 ###################
 # 1. Load selfie as grayscale float in [0, 1]
 # Resolution moderate (~300x300) so 4 loops run in reasonable time
-selfie = Image.open("media/selfie.jpg").convert("L")
+selfie = Image.open("data/selfie.jpg").convert("L")
 img = np.array(selfie, dtype=np.float64) / 255.0
 
 if img.shape[0] > 400 or img.shape[1] > 400:
@@ -54,13 +54,12 @@ plt.imsave("media/selfie_box9x9.jpg", res_2loop, cmap="gray")
 plt.imsave("media/selfie_Dx.jpg", selfie_Dx, cmap="gray")
 plt.imsave("media/selfie_Dy.jpg", selfie_Dy, cmap="gray")
 
-
 ###################
 ### Section 1.2 ###
 ###################
 
 # 1. Load cameraman image in grayscale float normalized to [0, 1]
-cam_img = Image.open("media/cameraman.png").convert("L")
+cam_img = Image.open("data/cameraman.png").convert("L")
 cam = np.array(cam_img, dtype=np.float64) / 255.0
 
 # 2. Define finite difference operators
@@ -89,7 +88,7 @@ plt.imsave("media/cam_edges_bin.jpg", edges_bin, cmap="gray")
 ###################
 
 # 1. Load cameraman
-cam_img = Image.open("media/cameraman.png").convert("L")
+cam_img = Image.open("data/cameraman.png").convert("L")
 cam = np.array(cam_img, dtype=np.float64) / 255.0
 
 # Define finite differences
