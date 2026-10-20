@@ -1,6 +1,8 @@
 import time
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import hsv_to_rgb
 from PIL import Image
 from scipy.signal import convolve2d
 from filters_core import conv2d_4loops, conv2d_2loops
@@ -81,3 +83,68 @@ plt.imsave("media/cam_Ix.jpg", Ix, cmap="gray")
 plt.imsave("media/cam_Iy.jpg", Iy, cmap="gray")
 plt.imsave("media/cam_grad_mag.jpg", grad_mag, cmap="gray")
 plt.imsave("media/cam_edges_bin.jpg", edges_bin, cmap="gray")
+
+###################
+### Section 1.3 ###
+###################
+
+# 1. Load cameraman
+cam_img = Image.open("media/cameraman.png").convert("L")
+cam = np.array(cam_img, dtype=np.float64) / 255.0
+
+# Define finite differences
+Dx = np.array([[1, 0, -1]], dtype=np.float64)
+Dy = np.array([[1], [0], [-1]], dtype=np.float64)
+
+# 2. Create 2D Gaussian Kernel (e.g., ksize=25, sigma=3)
+g1d = cv2.getGaussianKernel(25, 3)
+G = g1d @ g1d.T  # Outer product creates 2D Gaussian
+
+# --- METHOD 1: Two-Step Filtering ---
+cam_smooth = convolve2d(cam, G, mode='same', boundary='fill', fillvalue=0)
+Ix_m1 = convolve2d(cam_smooth, Dx, mode='same', boundary='fill', fillvalue=0)
+Iy_m1 = convolve2d(cam_smooth, Dy, mode='same', boundary='fill', fillvalue=0)
+grad_mag_m1 = np.sqrt(Ix_m1**2 + Iy_m1**2)
+edges_m1 = (grad_mag_m1 > 0.08).astype(np.float64)  # Tuned threshold
+
+# --- METHOD 2: DoG Filters (Single Step) ---
+DoG_x = convolve2d(G, Dx, mode='same', boundary='fill', fillvalue=0)
+DoG_y = convolve2d(G, Dy, mode='same', boundary='fill', fillvalue=0)
+
+Ix_m2 = convolve2d(cam, DoG_x, mode='same', boundary='fill', fillvalue=0)
+Iy_m2 = convolve2d(cam, DoG_y, mode='same', boundary='fill', fillvalue=0)
+grad_mag_m2 = np.sqrt(Ix_m2**2 + Iy_m2**2)
+edges_m2 = (grad_mag_m2 > 0.08).astype(np.float64)
+
+# Compare Method 1 vs Method 2 difference
+diff = np.max(np.abs(grad_mag_m1 - grad_mag_m2))
+print(f"Max difference between Method 1 and Method 2: {diff:.2e}")
+
+# Save deliverables to media/
+plt.imsave("media/cam_smooth.jpg", cam_smooth, cmap="gray")
+plt.imsave("media/cam_dog_grad_mag.jpg", grad_mag_m1, cmap="gray")
+plt.imsave("media/cam_dog_edges_bin.jpg", edges_m1, cmap="gray")
+plt.imsave("media/DoG_x.jpg", DoG_x, cmap="gray")
+plt.imsave("media/DoG_y.jpg", DoG_y, cmap="gray")
+
+###################
+### Section 1.4 ###
+###################
+
+# 1. Use Ix and Iy computed from DoG filters in Part 1.3
+theta = np.arctan2(Iy_m1, Ix_m1)  # Angle in radians [-pi, pi]
+
+# 2. Normalize components for HSV
+H = (theta + np.pi) / (2.0 * np.pi)  # Map [-pi, pi] -> [0, 1]
+S = np.ones_like(H)                   # Full saturation
+
+# Normalize gradient magnitude to [0, 1] for Value channel
+grad_norm = grad_mag_m1 / np.max(grad_mag_m1)
+V = grad_norm
+
+# 3. Stack into HSV array and convert to RGB
+hsv_img = np.dstack((H, S, V))
+rgb_img = hsv_to_rgb(hsv_img)
+
+# 4. Save visual output for webpage
+plt.imsave("media/cam_gradient_orientation_hsv.jpg", rgb_img)
