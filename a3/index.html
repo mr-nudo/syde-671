@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignment 3: Image Mosaicing and Automatic Stitching</title>
+  <link rel="stylesheet" href="../style.css">
+
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+  <div class="container">
+
+    <header>
+      <h1>Assignment 3: Image Mosaicing and Automatic Stitching</h1>
+      <p class="subtitle">Homographies, Point Correspondences, Distance Feathering, and Autostitching Pipelines</p>
+    </header>
+
+    <div class="section">
+      <h2>Project Overview & Goal</h2>
+      <p>
+        Image mosaicing seamlessly stitches multiple overlapping photographs taken from a fixed center of projection into a unified, high-resolution panorama. Constructing a robust image mosaic requires precise projective coordinate transformations, non-linear pixel interpolation, and smooth spatial blending.
+      </p>
+      <p>
+        In this assignment, I implemented a complete end-to-end panoramic stitching pipeline across both manual and automated paradigms:
+      </p>
+      <ul>
+        <li><b>Part A:</b> Image rectification, homography estimation ($H$-matrix), bilinear perspective warping, manual GUI point selection, and multi-image blending.</li>
+        <li><b>Part B:</b> Fully automated feature detection, Harris corner extraction, Adaptive Non-Maximal Suppression (ANMS), descriptor extraction, RANSAC point matching, and autostitched panoramas.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>Part A.1 & A.2: Image Rectification & Homography Estimation</h2>
+      <p>
+        A 2D projectivity or homography maps points from one planar image surface to another via a $3 \times 3$ matrix $H$ with 8 degrees of freedom:
+      </p>
+      <p>$$\begin{bmatrix} x' \\ y' \\ 1 \end{bmatrix} \sim \begin{bmatrix} h_{11} & h_{12} & h_{13} \\ h_{21} & h_{22} & h_{23} \\ h_{31} & h_{32} & h_{33} \end{bmatrix} \begin{bmatrix} x \\ y \\ 1 \end{bmatrix}$$</p>
+      <p>
+        Setting $h_{33} = 1$, each point correspondence yields two linearly independent equations. With $N \ge 4$ pairs, the overdetermined system $A h = 0$ is solved via Singular Value Decomposition (SVD), where the optimal solution is the right-singular vector corresponding to the smallest singular value.
+      </p>
+
+      <h3>Bilinear Interpolation & Inverse Mapping</h3>
+      <p>
+        To prevent hole artifacts during transformation, destination pixels are inverse-mapped back to source coordinates using $H^{-1}$. Sub-pixel locations are interpolated across neighboring intensity values using 2D bilinear sampling:
+      </p>
+      <p>$$I(x, y) = (1-a)(1-b)I_{0,0} + a(1-b)I_{1,0} + (1-a)bI_{0,1} + ab I_{1,1}$$</p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="data/rectification_test.jpg" alt="Rectification Test Source">
+          <div class="caption">Original Test Image (Slanted Surface)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/rectified_nn.jpg" alt="Perspective Rectified Output">
+          <div class="caption">Perspective Rectified Output (Frontal View)</div>
+        </div>
+      </div>
+
+      <div class="key-learning-box">
+        <h4>Interpolation Trade-offs: Nearest Neighbor vs. Bilinear</h4>
+        <ul>
+          <li><b>Nearest Neighbor:</b> Faster execution as it rounds coordinates directly to the closest integer pixel. However, it introduces noticeable staircase aliasing and jagged edges along high-frequency diagonal lines.</li>
+          <li><b>Bilinear Interpolation:</b> Computes a weighted average across the four surrounding pixels. While incurring slight computational overhead, it yields smooth, anti-aliased sub-pixel mapping. On dense photographic images, visual differences can be subtle, but Bilinear prevents artifacts along sharp geometric boundaries.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Part A.3 & A.4: Manual Mosaics & Smooth Alpha Feathering</h2>
+      <p>
+        Constructing a manual mosaic requires defining accurate correspondence points across overlapping regions. To prevent UI lag and high-memory standard GUI freezes, manual points were captured on a stable $0.5\times$ downscaled canvas and re-scaled back to full high-resolution coordinates:
+      </p>
+      <p>$$(x_{\text{full}}, y_{\text{full}}) = \frac{(x_{\text{clicked}}, y_{\text{clicked}})}{\text{WORK\_SCALE}}$$</p>
+
+      <h3>Distance-Transform Feather Blending</h3>
+      <p>
+        Simple hard-cut pasting creates harsh seam lines and intensity mismatches. To produce an invisible seam, I implemented $L_2$ Euclidean Distance Transform weighting. Each image region accumulates pixel intensity proportional to its distance from the nearest boundary:
+      </p>
+      <p>$$I_{\text{final}}(x,y) = \frac{\sum_{i} w_i(x,y) \cdot I_i(x,y)}{\sum_{i} w_i(x,y)}, \quad w_i(x,y) = \text{cv2.distanceTransform}(M_i)$$</p>
+
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
+        <div class="img-card">
+          <img src="data/outdoor_left.jpg" alt="Outdoor Left">
+          <div class="caption">Source 1: Outdoor Left</div>
+        </div>
+        <div class="img-card">
+          <img src="data/outdoor_center.jpg" alt="Outdoor Right">
+          <div class="caption">Source 2: Outdoor Right</div>
+        </div>
+      </div>
+
+      <div class="media-container-wide">
+        <img src="media/point_picker_gui.png" alt="Interactive Point Correspondence GUI">
+        <div class="caption"><b>Interactive Point Picker:</b> Alternating 6-point correspondence selection across overlapping views.</div>
+      </div>
+
+      <div class="media-container-wide">
+        <img src="media/manual_mosaic_outdoor.jpg" alt="Clean Blended Manual Mosaic">
+        <div class="caption"><b>Final Manual Blend:</b> $L_2$ Distance Feathered Output</div>
+      </div>
+
+      <div class="key-learning-box">
+        <h4>Part A System Learnings & Insights</h4>
+        <ul>
+          <li><b>Bounding Box Explosions:</b> Narrowly clustered or out-of-order point pairs produce singular/unstable $H$ matrices that project bounding boxes past $15,000+$ pixels, hanging memory allocation. Distributing points across wide, coplanar structures prevents projective instability.</li>
+          <li><b>Point Alternation & Order:</b> Corresponding points must strictly follow identical pairing sequences (Left $\rightarrow$ Right) to avoid inverted spatial mappings.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Part B: Feature Detection, ANMS, Descriptor Extraction, & RANSAC</h2>
+      <p>
+        Manual point picking is labor-intensive and prone to human error. Part B automates point alignment through a multi-stage computer vision feature extraction pipeline based on <i>Brown et al.</i>
+      </p>
+
+      <h3>1. Harris Corner Detection & Adaptive Non-Maximal Suppression (ANMS)</h3>
+      <p>
+        Harris corners detect local intensity variations in all directions. However, raw corners cluster heavily around dense textured zones. ANMS enforces spatial distribution by suppressing weaker corners within a minimum suppression radius $r_i$:
+      </p>
+      <p>$$r_i = \min_j |x_i - x_j| \quad \text{s.t.} \quad f(x_i) < c_{\text{robust}} \cdot f(x_j)$$</p>
+
+      <div class="img-grid">
+        <div class="img-card">
+          <img src="media/harris_raw.jpg" alt="Raw Harris Corners">
+          <div class="caption">Raw Harris Corners (Dense Clustered Textures)</div>
+        </div>
+        <div class="img-card">
+          <img src="media/harris_anms.jpg" alt="ANMS Suppressed Corners">
+          <div class="caption">ANMS Uniformly Distributed Corners</div>
+        </div>
+      </div>
+
+      <h3>2. Feature Descriptor Extraction & Matching</h3>
+      <p>
+        For each suppressed corner, a $40 \times 40$ window is extracted, blurred to prevent aliasing, and downsampled to an $8 \times 8$ descriptor vector. Descriptors are bias/gain normalized ($\mu = 0, \sigma = 1$). Matching utilizes Lowe's Ratio Test ($SSD_1 / SSD_2 < 0.7$) to discard ambiguous points.
+      </p>
+
+      <div class="media-container-wide">
+        <img src="media/feature_matches.jpg" alt="Feature Descriptor Matches">
+        <div class="caption"><b>Lowe's Ratio Feature Matching:</b> Clean point correspondences across overlapping image pairs.</div>
+      </div>
+
+      <h3>3. 4-Point RANSAC Homography Estimation</h3>
+      <p>
+        To eliminate false feature matches, 4 random correspondences are iteratively sampled ($N = 2000$ trials) to estimate candidate $H$ matrices. Correspondences meeting the inlier threshold $d(p', H p) < 3.0 \text{ pixels}$ are retained, and $H$ is re-computed over the full inlier set.
+      </p>
+
+      <div class="grid-3-inline">
+        <div class="img-card">
+          <img src="data/indoor_left.jpg" alt="Indoor Left Input">
+          <div class="caption">Source 1: Indoor Left</div>
+        </div>
+        <div class="img-card">
+          <img src="data/indoor_center.jpg" alt="Indoor Center Input">
+          <div class="caption">Source 2: Indoor Center</div>
+        </div>
+        <div class="img-card">
+          <img src="data/indoor_right.jpg" alt="Indoor Right Input">
+          <div class="caption">Source 3: Indoor Right</div>
+        </div>
+      </div>
+
+      <div class="media-container-wide">
+        <img src="media/autostitch_indoor.jpg" alt="Automated Indoor Panorama">
+        <div class="caption"><b>Final Autostitched Panorama:</b> Indoor 3-Image Seamless Mosaic</div>
+      </div>
+
+      <div class="key-learning-box">
+        <h4>Part B Autostitching Learnings</h4>
+        <ul>
+          <li><b>Spatial Uniformity via ANMS:</b> Without ANMS, RANSAC overfits to dense local clusters (like leaf textures or carpet patterns), resulting in wildly distorted global homographies.</li>
+          <li><b>Lowe's Ratio Safeguard:</b> Enforcing $SSD_1 / SSD_2 < 0.7$ rejects non-distinctive repetitive textures, ensuring high RANSAC inlier ratios ($> 85\%$).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Summary Takeaway & Final Thoughts</h2>
+      <p class="subtitle" style="font-style: italic; color: #64748b; margin-top: -10px;">
+        Key takeaways on projective geometry, numerical stability, and optimization pipelines.
+      </p>
+
+      <ul>
+        <li><b>Geometric Sensitivity & Stability:</b> Homographies are highly sensitive to ill-conditioned point distributions. Ensuring broad, coplanar point sampling prevents catastrophic bounding box explosions and matrix instability.</li>
+        <li><b>Performance & Scale Optimization:</b> Downscaling working canvases during interactive point selection (e.g., $0.5\times$ work scale) eliminates GUI lag and memory overhead, while inverse coordinate scaling guarantees full-resolution transformation precision.</li>
+        <li><b>Seamless Transition Logic:</b> Distance-transform alpha feathering gracefully resolves illumination differences, vignetting, and parallax artifacts across overlapping boundaries.</li>
+        <li><b>Robustness of RANSAC:</b> Combining Lowe's ratio matching with iterative RANSAC sampling transforms noisy feature detection into a deterministic, production-grade panorama engine.</li>
+      </ul>
+    </div>
+
+  </div>
+
+</body>
+</html>
