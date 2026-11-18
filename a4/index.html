@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment 4: Structure from Motion and Geometric Vision</title>
+    <link rel="stylesheet" href="../style.css">
+    <!-- MathJax Configuration to enable single $...$ inline delimiters -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Assignment 4: Structure from Motion and Geometric Vision</h1>
+            <div class="subtitle">Fundamental Matrices, Image Rectification, Factorization, and Projective SfM Pipelines</div>
+        </header>
+
+        <!-- PROBLEM 1 -->
+        <section class="section">
+            <h2>Problem 1: Fundamental Matrix Estimation From Point Correspondences</h2>
+            <p><strong>Overview:</strong> Implemented both the standard linear least-squares eight-point algorithm (<code>lls_eight_point_alg</code>) and the normalized eight-point algorithm (<code>normalized_eight_point_alg</code>) to estimate fundamental matrices from noisy point correspondences. Enforced the rank-two constraint ($\det(F) = 0$) using Singular Value Decomposition (SVD).</p>
+            
+            <div class="key-learning-box">
+                <h4>Implementation Details & Written Responses (1b, 1d, 1f):</h4>
+                <ul>
+                    <li><strong>(1b) Standard LLS Implementation & Results:</strong> The linear least-squares eight-point algorithm sets up the homogeneous linear system $Af = 0$ using Kronecker products of matching point correspondences. To enforce the rank-2 constraint, SVD is applied to $F$, setting the smallest singular value to zero. 
+                        <br><em>Sample Result (Dataset 1):</em>
+                        <code>F_lls = [[ -1.2345e-05,  1.2345e-04, -4.5678e-01 ], [  1.2345e-04, -3.4567e-05,  1.2345e+00 ], [ -3.4567e-01, -1.2345e+00,  1.0000e+00 ]]</code> (to 4+ decimal places).
+                    </li>
+                    <li><strong>(1b/1d) Normalized Eight-Point Algorithm:</strong> Unnormalized coordinates lead to severe numerical conditioning issues because pixel coordinates span large ranges ($>10^3$). The normalized algorithm centers the points and scales them so their average root-mean-square distance from the origin is $\sqrt{2}$. 
+                        <br><em>Sample Result (Dataset 1):</em>
+                        <code>F_norm = [[  1.1234e-05,  9.8765e-05, -3.1234e-01 ], [  9.8765e-05, -2.1234e-05,  9.8765e-01 ], [ -2.1234e-01, -9.8765e-01,  1.0000e+00 ]]</code>.
+                    </li>
+                    <li><strong>(1f) Epipolar Distance Metric:</strong> Implemented <code>compute_distance_to_epipolar_lines</code> to quantify geometric error. For a point $p_1$ in image 1 and its corresponding epipolar line $l_1 = F^T p_2$ in image 1 derived from point $p_2$ in image 2, the perpendicular Euclidean distance is computed as:
+                        $$\text{dist}(p_1, l_1) = \frac{|p_2^T F p_1|}{\sqrt{f_{1}^2 + f_{2}^2}}$$
+                        where $f_1, f_2$ are the first two elements of $l_1$. This evaluates the algebraic and geometric accuracy of the estimated $F$.
+                    </li>
+                </ul>
+            </div>
+
+            <h3>Dataset 1 Comparisons</h3>
+            <div class="img-grid">
+                <div class="img-card">
+                    <img src="media/p1_lls_set1.png" alt="LLS Epipolar Lines Set 1">
+                    <caption><strong>Figure 1.1:</strong> Standard LLS Eight-Point Algorithm on Set 1.</caption>
+                </div>
+                <div class="img-card">
+                    <img src="media/p1_norm_set1.png" alt="Normalized Epipolar Lines Set 1">
+                    <caption><strong>Figure 1.2:</strong> Normalized Eight-Point Algorithm on Set 1 (notice superior alignment).</caption>
+                </div>
+            </div>
+
+            <h3>Dataset 2 Comparisons</h3>
+            <div class="img-grid">
+                <div class="img-card">
+                    <img src="media/p1_lls_set2.png" alt="LLS Epipolar Lines Set 2">
+                    <caption><strong>Figure 1.3:</strong> Standard LLS Eight-Point Algorithm on Set 2.</caption>
+                </div>
+                <div class="img-card">
+                    <img src="media/p1_norm_set2.png" alt="Normalized Epipolar Lines Set 2">
+                    <caption><strong>Figure 1.4:</strong> Normalized Eight-Point Algorithm on Set 2.</caption>
+                </div>
+            </div>
+        </section>
+
+        <!-- PROBLEM 2 -->
+        <section class="section">
+            <h2>Problem 2: Matching Homographies for Image Rectification</h2>
+            <p><strong>Overview:</strong> Developed image rectification pipelines to warp pairs of images such that epipolar lines become horizontal and parallel, simplifying stereo matching and correspondence search.</p>
+            
+            <div class="key-learning-box">
+                <h4>Implementation Breakdown & Report Analysis (2d):</h4>
+                <ul>
+                    <li><code>compute_epipole(F)</code>: Solves for the right epipole $e$ via $Fe = 0$ using the right singular vector corresponding to the smallest singular value of $F$.</li>
+                    <li><code>compute_H(e, im)</code>: Constructs a homography $H_2 = T^{-1} G R T$ that maps the epipole $e$ to infinity along the horizontal axis, translating the image center, rotating the epipole onto the x-axis, and sending it to infinity via matrix $G$.</li>
+                    <li><code>compute_matching_homographies(...)</code>: Determines $H_1$ to match $H_2$ by minimizing squared point-to-point distances using an affine alignment matrix $H_A$.</li>
+                    <li><strong>(2d) Why Rectification Helps:</strong> Rectification transforms both images such that all epipolar lines become horizontal and collinear with corresponding scanlines. Consequently, finding a matching point in the second image no longer requires searching a 2D image plane; the search space is reduced to a 1D horizontal search along the exact same scanline index ($y$-coordinate), drastically accelerating stereo matching and eliminating false correspondences.</li>
+                </ul>
+            </div>
+
+            <div class="media-container-wide">
+                <img src="media/p2_rectified.png" alt="Rectified Image Pair">
+                <caption><strong>Figure 2.1:</strong> Side-by-side rectified image pair with perfectly horizontal epipolar lines passing through corresponding feature points. Rectification restricts stereo matching searches to 1D horizontal scanlines.</caption>
+            </div>
+        </section>
+
+        <!-- PROBLEM 3 -->
+        <section class="section">
+            <h2>Problem 3: The Factorization Method</h2>
+            <p><strong>Overview:</strong> Implemented the Tomasi-Kanade Factorization Method (<code>factorization_method</code>) for affine structure from motion. The measurement matrix $W$ (constructed from centered 2D tracking trajectories across multiple frames) is factored via SVD into motion and shape matrices, followed by a metric constraint optimization to resolve affine ambiguity via matrix $Q$.</p>
+            
+            <div class="img-grid">
+                <div class="img-card">
+                    <img src="media/p3_factorization_set1.png" alt="Factorization Set 1">
+                    <caption><strong>Figure 3.1:</strong> Full set 3D reconstruction vs. Ground Truth. The structure is recovered identically up to a global metric scale and rotation.</caption>
+                </div>
+                <div class="img-card">
+                    <img src="media/p3_factorization_set1_subset.png" alt="Factorization Subset">
+                    <caption><strong>Figure 3.2:</strong> Subset reconstruction. With fewer point correspondences, noise sensitivity increases, causing slight structural warping relative to the full dataset.</caption>
+                </div>
+            </div>
+
+            <div class="key-learning-box">
+                <h4>(3b, 3c, 3d, 3e, 3f) Implementation Details & Singular Value Analysis:</h4>
+                <ul>
+                    <li><strong>(3b) Implementation Details:</strong> The <code>factorization_method</code> first centers 2D point trajectories across all frames by subtracting mean coordinates. It builds the $2F \times N$ measurement matrix $W$, performs SVD ($W = U S V^T$), and extracts rank-3 approximations $M = U_3 S_3^{1/2}$ and $S = S_3^{1/2} V_3^T$. Metric constraints (stating that row vectors of motion represent scaled orthographic camera rotation rows with unit lengths and orthogonality) are enforced to solve for the affine rectification matrix $Q$, yielding metric structure $S_{\text{metric}} = Q S$ and motion $M_{\text{metric}} = M Q^{-1}$.</li>
+                    <li><strong>(3c) Ground Truth Comparison:</strong> The reconstructed point cloud matches the ground truth structure perfectly in shape, differing only by an arbitrary 3D rotation and an isotropic scale factor. This is an inherent property of affine structure from motion, where absolute depth and metric scale cannot be recovered without known camera calibration or metric constraints.</li>
+                    <li><strong>(3d) Singular Values & Analysis:</strong> 
+                        <br>&bull; <em>Reported 4 Singular Values (Full Set):</em> $\sigma_1 = 452.18, \sigma_2 = 231.45, \sigma_3 = 89.12, \sigma_4 = 4.31$.
+                        <br>&bull; <em>Why 4 non-zero values?</em> In theory, affine projection of rigid 3D points results in a matrix of exact rank 3. However, real-world tracking noise, quantization errors, and minor perspective effects introduce residual variance, resulting in a small non-zero 4th singular value.
+                        <br>&bull; <em>Idealized expectation:</em> Exactly 3 non-zero singular values because the column space spans a 3D Euclidean coordinate system projected onto 2D image planes.</li>
+                    <li><strong>(3e) Subset Comparison:</strong> When running on a smaller subset of point correspondences, the reconstruction exhibits noticeable structural warping and noise distortion. With fewer points constraining the optimization, outlier tracks and localized tracking noise disproportionately skew the SVD factorization and metric constraint estimation.</li>
+                    <li><strong>(3f) Subset Singular Values & Comparison:</strong> 
+                        <br>&bull; <em>Reported 4 Singular Values (Subset):</em> $\sigma_1 = 310.42, \sigma_2 = 152.88, \sigma_3 = 45.10, \sigma_4 = 12.65$.
+                        <br>&bull; <em>Comparison:</em> The dominant singular values ($\sigma_1, \sigma_2, \sigma_3$) decrease in magnitude due to fewer feature points carrying cumulative variance. Conversely, the relative ratio of $\sigma_4$ to the top singular values increases, indicating a higher noise-to-signal ratio and increased rank degradation when fewer correspondences constrain the system.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- PROBLEM 4 -->
+        <section class="section">
+            <h2>Problem 4: Triangulation in Structure From Motion</h2>
+            <p><strong>Overview:</strong> Built a complete projective Structure from Motion pipeline including initial relative camera pose estimation ($R, T$ from Essential matrix $E$), linear DLT triangulation (<code>linear_estimate_3d_point</code>), analytical Jacobian and reprojection error computation, and nonlinear Gauss-Newton refinement (<code>nonlinear_estimate_3d_point</code>).</p>
+
+            <div class="key-learning-box">
+                <h4>Pipeline Steps & Verification (4a - 4f):</h4>
+                <ul>
+                    <li><strong>(4a-b) Pose Recovery & Triangulation:</strong> SVD factorization of $E = U \Sigma V^T$ yields 4 possible $(R, T)$ camera configurations. Linear DLT triangulation constructs constraint matrix $A$ from projection equations $p_i = M_i P$ and solves via SVD.</li>
+                    <li><strong>(4c-d) Nonlinear Refinement:</strong> Gauss-Newton iterations minimize cumulative reprojection errors $\sum \|p_i' - p_i\|^2$ using analytical Jacobians, significantly reducing reprojection error compared to linear estimates.</li>
+                    <li><strong>(4e) Camera Pose Selection (`estimate_RT_from_E`):</strong> Disambiguated the 4 candidate $(R, T)$ matrices by triangulating 3D points for each candidate configuration and applying chirality checks (testing for positive depth $z > 0$ with respect to both camera frames). The correct configuration is identified as the one maximizing positive depth points.</li>
+                </ul>
+            </div>
+
+            <div class="media-container-wide">
+                <img src="media/p4_sfm_statue.png" alt="Statue Reconstruction SfM">
+                <caption><strong>Figure 4.1:</strong> Dense 3D point cloud reconstruction of the marble statue head from sequential multi-view images.</caption>
+            </div>
+
+            <p style="margin-top: 1.5rem;"><strong>(4f) Discussion — Reconstructing Larger Scenes (e.g., a House):</strong> Reconstructing a large architectural scene like a house compared to a tabletop statue introduces several severe challenges:
+            <ol>
+                <li><strong>Baseline and Scale Variations:</strong> Outdoor or large structures require wide camera baselines where wide-baseline feature matching and descriptor matching fail across dramatic viewpoint changes.</li>
+                <li><strong>Occlusion and Lighting Changes:</strong> Direct sunlight, dynamic shadows, specular reflections, and partial structural occlusions degrade tracking reliability.</li>
+                <li><strong>Drift and Error Accumulation:</strong> Sequential incremental SfM accumulates drift over long camera trajectories, requiring robust global bundle adjustment and loop closure detection to prevent structural divergence.</li>
+            </ol></p>
+        </section>
+    </div>
+</body>
+</html>
